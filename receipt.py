@@ -6,7 +6,7 @@ from text_extractor import ReceiptTextExtractor
 def main():
     folder_name = "receipt_imgs"
     # imgs = ['rec0.jpg', 'rec1.jpg', 'rec2.jpg', 'rec4.jpg', 'rec5.jpeg', 'rec7.jpg', 'rec9.jpg']
-    imgs = ['rec2.jpg']
+    imgs = ['rec5.jpeg']
 
     preprocessor = ReceiptPreprocessor(debug_mode=False)
     text_extractor = ReceiptTextExtractor(debug_mode=True)

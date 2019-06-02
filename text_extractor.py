@@ -11,77 +11,123 @@ class ReceiptTextExtractor:
         pass
 
     def cntY(self, elem):
-        x,y,w,h = cv2.boundingRect(elem)
+        x,y,w,h = elem
         return y
 
-    def extract_text(self, img):
-        img_height, img_width, img_channels = img.shape
+    def cntX(self,elem):
+        x,y,w,h = elem
+        return x
 
-        #find contours that are text sized
+    '''
+    find contours that are text sized
+    return them sorted by Y(height)
+    '''
+    def find_text_boxes(self,img):
         smallTextSize = 100
-        largeTextSize = 10000
+        largeTextSize = 16000
         #these contours are our targets
         imgray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
         thresh = cv2.adaptiveThreshold(imgray,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,51,10)
         contours, hierarchy = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
         sizes = []
         targets = []
+
         for cnt in contours:
-            size = cv2.contourArea(cnt)
+            (x, y, w, h) = cv2.boundingRect(cnt)
+            P1 = (x,y)
+            P2 = (x+w,y+h)
+            size = w*h
+            sizes.append(size)
             if size >= smallTextSize and size <= largeTextSize:
-                sizes.append(size)
-                targets.append(cnt)
+                targets.append((x, y, w, h))
         
+        # print("Sizes", sorted(sizes))
         #sort target contours on y height in image
         targets = sorted(targets, key=self.cntY)
-        prevY = 0
-        yLean = 70
-        
-        #group by line
+        return targets
+
+    def color_groups(self,img,text_boxes):
+        #top text box
+        t_x, t_y, t_w, t_h = text_boxes[0]
+        #bottom text box
+        b_x, b_y, b_w, b_h = text_boxes[-1]
+
+        OldRange = (b_y - t_y)  
+        NewRange = (255 - 0)  
+
+        for text_box in text_boxes:
+            x, y, w, h = text_box
+            NewValue = (((y - t_y) * NewRange) / OldRange)
+            color = (NewValue,150,NewValue/2)
+            P1 = (x,y)
+            P2 = (x+w,y+h)
+            cv2.rectangle(img,P1,P2,color,6)
+
+    def group_text(self,img,text_boxes):
+        segments = []
         groups = []
-        line_group = []
-        for target in targets:
-            x,y,w,h = cv2.boundingRect(target)
-            if prevY < y-yLean or prevY > y+yLean:
-                prevY = y
-                groups.append(line_group)
-                line_group = []
+        current_group = []
+        similar_thres = 100
+
+        for text_box in text_boxes:
+            x, y, w, h = text_box
+
+            #if current line is empty start new group
+            if len(current_group) == 0:
+                current_group.append(text_box)
+                continue
+            
+            #first elemnt in current group
+            r_x, r_y, r_w, r_h = current_group[0]
+            
+            if abs(y-r_y) <= similar_thres:
+                current_group.append(text_box)
             else:
-                line_group.append(target)
-            
-        groups.append(line_group)
+                groups.append(current_group)
+                current_group = [text_box]
 
-        for group in groups:
-            color = (100,50,randint(100, 255))
-            smallestX = 100000
-            largestX = 0
-            smallestY = 100000
-            largestY = 0
-            for cnt in group:
-                x,y,w,h = cv2.boundingRect(cnt)
-                
-                if(x < smallestX):
-                    smallestX = x
-                elif(x > largestX):
-                    largestX = x
-                if(y < smallestY):
-                    smallestY = y
-                elif(y > largestY):
-                    largestY = y
+        for text_group in groups:
+            top = text_group[0]
+            bottom = text_group[-1]
             
-            smallestX = max(0,smallestX - 50)
-            smallestY = max(0,smallestY - 50)
-            largestX = min(largestX + 50, img_width)
-            largestY = min(largestY + 50, img_height)
+            group = sorted(text_group, key=self.cntX)
+            left = group[0]
+            right = group[-1]
 
-            height = largestY-smallestY
-            width = largestX-smallestX
+            padding = 25
+
+            #x, y, w, h
+            #P1---P3
+            #|    |
+            #P2---P4
+            smallestX = left[0]-padding
+            largestX = right[0]+right[2]+padding
+            smallestY = top[1]-padding
+            largestY = bottom[1]+bottom[3]+padding
+
             P1 = (smallestX,smallestY)
-            P2 = (smallestX+width,smallestY+height)
-            cv2.rectangle(img,P1,P2,color,4)
-            segment = img[smallestY:smallestY+height, smallestX:smallestX+width]
+            P4 = (largestX,largestY)
+            # cv2.rectangle(img,P1,P4,(0,255,0),6)
+
+            segment = img[smallestY:largestY, smallestX:largestX]
+            segments.append(segment)
+
+
+        return segments
+            
+
+    def extract_text(self, img):
+        img_height, img_width, img_channels = img.shape
+
+        text_boxes = self.find_text_boxes(img)
+
+        segments = self.group_text(img,text_boxes)
+
+        
+        for segment in segments:
             seg_height, seg_width, seg_chan = segment.shape
-            # if(seg_height != 0 and seg_width != 0):
-                # plt.imshow(segment, cmap = 'gray')
-                # plt.show()
+            if(seg_height != 0 and seg_width != 0):
+                plt.imshow(segment, cmap = 'gray')
+                plt.show()
+
         
