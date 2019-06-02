@@ -1,6 +1,12 @@
 import cv2
 from matplotlib import pyplot as plt
 from random import randint
+try:
+    from PIL import Image
+except ImportError:
+    import Image
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 class ReceiptTextExtractor:
 
@@ -125,9 +131,9 @@ class ReceiptTextExtractor:
 
         
         for segment in segments:
-            seg_height, seg_width, seg_chan = segment.shape
-            if(seg_height != 0 and seg_width != 0):
-                plt.imshow(segment, cmap = 'gray')
-                plt.show()
+            text = pytesseract.image_to_string(Image.fromarray(segment))
+            if "total" in text.lower():
+                print(text)
+        print("-----------------------")
 
         
