@@ -6,21 +6,57 @@ from transform import four_point_transform
 from shapedetector import ShapeDetector
 
 class ReceiptPreprocessor:
+	""" 
+    Helper Class responsible for aligning/cropping receipt image 
+    """
 	
 	debug_mode = False
 
 	def __init__(self, debug_mode=False):
+		""" 
+        Default Constructor
+
+        Parameters: 
+        debug_mode (bool): true for verbose logging
+
+        """
+
 		self.debug_mode = debug_mode
 		pass
 
 
 	def adaptive_thres(self, img):
+		""" 
+        Apply Adaptive Threshold
+
+        Parameters: 
+        img (image): image to apply adaptive threshold
+
+        Returns:
+        (image): image after applying threshold
+
+        """
+
 		img = cv2.medianBlur(img,5)
 		return cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,2)
 
-	def crop_minAreaRect(self, img, rect):
-		print("rect: {}".format(rect))
+	def crop_rect(self, img, rect):
+		""" 
+        Crop rectangle from image
 
+        Parameters: 
+        img (image): image to crop from
+        rect (Rectangle): the rectangle section to crop
+
+        Returns:
+        (image): image after applying crop
+
+        """
+
+		if debug_mode:
+			print("rect: {}".format(rect))
+
+		#convert rectangle into nice form
 		box = cv2.boxPoints(rect)
 		box = np.int0(box)
 
@@ -45,7 +81,20 @@ class ReceiptPreprocessor:
 		return img
 
 	def find_receipt(self, img):
-		#Otsu's thresholding algorithm for binarization
+		""" 
+        Find receipt in image using the following hueristic
+
+        The receipt will be the largest white box
+
+        Parameters: 
+        img (image): image to find receipt in
+
+        Returns:
+        (image, Rectangle): Threshold image, Bounds of Receipt
+
+        """
+
+		#thresholding algorithm for binarization
 		#make recipt white and background black
 		blur = cv2.GaussianBlur(img,(51,51),0)
 		gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
@@ -68,14 +117,14 @@ class ReceiptPreprocessor:
 		box = cv2.boxPoints(rotrect)
 		box = np.int0(box)
 	    
-		# #unwarp the boxed area
+		#unwarp the boxed area
 		# resized = four_point_transform(resized, box)
 
-		# #recalculate the white box for accuracy
+		#recalculate the white box for accuracy
 		# largest = find_largest_white_rect(resized, img)
 
-		# multiply the contour (x, y)-coordinates by the resize ratio,
-		# then draw the contours and the name of the shape on the image
+		#multiply the contour (x, y)-coordinates by the resize ratio,
+		#then draw the contours and the name of the shape on the image
 		largest = largest.astype("float")
 		largest *= ratio
 		largest = largest.astype("int")
@@ -84,22 +133,34 @@ class ReceiptPreprocessor:
 		box = cv2.boxPoints(rotrect)
 		box = np.int0(box)
 
-		# cv2.drawContours(thresh,[box],0,(255,0,0),10)
-		# cv2.imshow("image", resized)
+		if debug_mode:
+			cv2.drawContours(thresh,[box],0,(255,0,0),10)
 
 		return thresh, rotrect
 
 
-	def find_largest_white_rect(self, thresh, img):
+	def find_largest_white_rect(self, thresh):
+		""" 
+        Find the largest white box in image
+
+        Parameters: 
+        thresh (image): image after threshold filtered
+
+        Returns:
+        (Rectangle): bounds of largest white box
+
+        """
+
 		#now detect white rectange in image
 		contours,hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
 		thresh = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
 
 		sd = ShapeDetector()
-		print("Finding Contours...")
-		#assume largest contor is outline?
-		if len(contours) != 0:
-			print("Found!")
+		if debug_mode:
+			print("Finding Contours...")
+			#assume largest contor is outline?
+			if len(contours) != 0:
+				print("Found!")
 
 		largest = contours[0]
 		largest_mean = 0
@@ -108,7 +169,7 @@ class ReceiptPreprocessor:
 			box = cv2.boxPoints(rotrect)
 			box = np.int0(box)
 
-			cropImg = self.crop_minAreaRect(thresh, rotrect)
+			cropImg = self.crop_rect(thresh, rotrect)
 
 			crop_mean = cv2.mean(cropImg)[3]
 			print(type(crop_mean))
@@ -120,50 +181,43 @@ class ReceiptPreprocessor:
 		return largest
 
 	def apply_fft(self, img):
+		""" 
+        Apply FFT
+
+        Parameters: 
+        img (image): image to apply FFT
+
+        Returns:
+        (image): image after applying FFT
+
+        """
+
 		img_float32 = np.float32(img)
 		dft = cv2.dft(img_float32, flags = cv2.DFT_COMPLEX_OUTPUT)
 		dft_shift = np.fft.fftshift(dft)
 
 		return 16*np.log(cv2.magnitude(dft_shift[:,:,0],dft_shift[:,:,1]))
 
-	def CannyThreshold(self, val):
-		ratio = 3
-		low_threshold = val
-		# img_blur = cv2.blur(global_fft, (3,3))
-		if global_fft is not None:
-			detected_edges = cv2.Canny(global_fft, low_threshold, low_threshold*ratio, 3)
-			cv2.imshow('image', detected_edges)
-		else:
-			print("None global_fft")
-
 	def align_img_text(self, img):
+		""" 
+        Use FFT to create line align axis of rotation
+        Then find degree of rotation of major lines and rotate image
 
+        Parameters: 
+        img (image): image to align text horizontally
+
+        Returns:
+        (double): angle to rotate the image by
+
+        """
 		img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 		rows,cols = img.shape
 
 		fft = self.apply_fft(img)
 		fft = cv2.GaussianBlur(fft,(5,5),0)
 
-		# cv2.imshow("image", fft/255)
-		# fft = cv2.equalizeHist(fft)
-		# img = cv2.GaussianBlur(img,(5,5),0)
-		# ret3,fft = cv2.threshold(np.uint8(blur),127,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-		# fft = cv2.threshold(fft,200,255,cv2.THRESH_BINARY)
-
-		# global global_fft
-		# global_fft = np.uint8(fft)
-		# cv2.createTrackbar("Min Thres", 'image' , 0, 100, CannyThreshold)
-		# CannyThreshold(0)
-		# cv2.waitKey(0)
-		# cv2.imshow("image", fft/255)
-		# cv2.waitKey(0)
-		# cv2.destroyAllWindows()
-
 		threshold = 10
 		edges = cv2.Canny(np.uint8(fft),23,23*3)
-		# cv2.imshow("image", edges)
-		# cv2.waitKey(0)
-		# cv2.destroyAllWindows()
 		lines = cv2.HoughLines(edges,1,np.pi/180,400)
 		thetas = []
 		if lines is None or len(lines) == 0:
@@ -203,12 +257,6 @@ class ReceiptPreprocessor:
 		#use 2 most frequent
 		for i in range(min(len(thetas),2)):
 			theta = thetas[i]
-			# if theta > 90+threshold:
-			# 	theta = theta-90
-			# elif theta < threshold:
-			# 	theta = theta
-			# else:
-			# 	theta = 90-theta
 			calc_angles.append(theta)
 
 		if self.debug_mode:
@@ -220,6 +268,18 @@ class ReceiptPreprocessor:
 		return theta
 
 	def rotate_bound(self, image, angle):
+		""" 
+        Rotate an image by an angle
+
+        Parameters: 
+        img (image): image to rotate
+        angle (double): angle of rotation
+
+        Returns:
+        (image): rotated image
+
+        """
+
 		# grab the dimensions of the image and then determine the
 		# center
 		(h, w) = image.shape[:2]
@@ -244,7 +304,17 @@ class ReceiptPreprocessor:
 		return cv2.warpAffine(image, M, (nW, nH))
 
 	def preprocess(self, img):
-		#TODO refactor into align function
+		""" 
+        Preprocess a receipt image to extract text from
+
+        Parameters: 
+        img (image): image to process
+
+        Returns:
+        (image): processed image
+
+        """
+        
 		#pre-rotate image to test
 		fake_rotation = -23
 		img = self.rotate_bound(img, fake_rotation)
@@ -258,15 +328,15 @@ class ReceiptPreprocessor:
 			#determined to be straight so remove pre-rotate
 			img = self.rotate_bound(img, -fake_rotation)
 
-		# #find receipt
+		#find receipt
 		# img_binary, receipt_outline = self.find_receipt(img)
 
 		# box = cv2.boxPoints(receipt_outline)
 		# box = np.int0(box)
 
-		# #crop to receipt
+		#crop to receipt
 		# cv2.drawContours(img,[box],0,(0,255,0),10)
-		# img = self.crop_minAreaRect(img, receipt_outline)
+		# img = self.crop_rect(img, receipt_outline)
 		# img = four_point_transform(img, box)
 
 		return img

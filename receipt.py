@@ -1,17 +1,27 @@
 import cv2
 from matplotlib import pyplot as plt
 from receipt_preprocessor import ReceiptPreprocessor
-from text_extractor import ReceiptTextExtractor
+# from text_extractor import ReceiptTextExtractor
 
 def main():
+    """ 
+    Main method for processing receipts 
+  
+    Attempts to Rotate, Crop, and Parse Receipts 
+    """
+    debug = True
     folder_name = "receipt_imgs"
     imgs = ['rec0.jpg', 'rec1.jpg', 'rec2.jpg', 'rec4.jpg', 'rec5.jpeg', 'rec7.jpg', 'rec9.jpg']
-#    imgs = ['rec2.jpg']
+    imgs_test = ['rec2.jpg']
 
-    preprocessor = ReceiptPreprocessor(debug_mode=False)
-    text_extractor = ReceiptTextExtractor(debug_mode=True)
+    preprocessor = ReceiptPreprocessor(debug_mode=debug)
+    # text_extractor = ReceiptTextExtractor(debug_mode=debug)
 
-
+    #only use test images when debugging
+    if debug:
+        imgs = imgs_test
+    
+    #process each image
     for img_name in imgs:
         #setup window
         cv2.namedWindow('image',cv2.WINDOW_NORMAL)
@@ -23,9 +33,11 @@ def main():
         #save original
         original = img.copy()
 
+        #process image
         img = preprocessor.preprocess(img)
 
-        text_extractor.extract_text(img)
+        #extract text
+        #text_extractor.extract_text(img)
 
         #show original and preprocessed image
         # plt.subplot(121),plt.imshow(original, cmap = 'gray')
